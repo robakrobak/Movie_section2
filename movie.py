@@ -25,7 +25,7 @@ class MovieModel:
         movie = None
 
         if row:
-            movie = cls(row[0], row[1])  # *row
+            movie = cls(row[0], row[1])  # *row  tworzymy obiekt
 
         connection.close()
         return movie
@@ -36,16 +36,28 @@ class MovieModel:
         return cls.find_movie_by(query, (name,))
 
     @classmethod
-    def find_by_movie_id(cls, _id):
-        query = "SELECT * FROM movies WHERE id=?"
-        return cls.find_movie_by(query, (_id,))
-
-    @classmethod
     def find_by_movie_genre(cls, genre):
         query = "SELECT * FROM movies WHERE genre=?"
         return cls.find_movie_by(query, (genre,))
 
+    def add_movie(self):
+        connection = sqlite3.connect("data.db")
+        cursor = connection.cursor()
+        query = "INSERT INTO movies VALUES (?, ?)"
+        cursor.execute(query, (self.title, self.genre))
+        connection.commit()  # trzeba zatwierdzić zmiany commit
+        connection.close()  # by nie blokować innym połączenia z bazą
 
+    def update_movie(self, genre):
+        connection = sqlite3.connect("data.db")
+        cursor = connection.cursor()
+        query = "UPDATE movies SET genre=? WHERE name=?"
+        cursor.execute(query, (genre, self.title))
+        connection.commit()
+        connection.close()
+
+    def to_dict(self):
+        return {"title": self.title, "genre": self.genre}
 
 
 class Movie(Resource):
@@ -54,23 +66,39 @@ class Movie(Resource):
         "genre", type=str, required=True, help="This field cannot be left blank!"
     )
 
-    @jwt_required()
+    # @jwt_required()
     def get(self, name):
-        for movie in movies:
-            if movie["name"] == name:
-                return movie
-        return {"message": "We coundn't find such a movie in our database."}, 404
+        movie = MovieModel.find_by_movie_name(name)
+        if movie:
+            return {"name": movie.title, "genre": movie.genre}
+        else:
+            return {"message": "We coundn't find such a movie in our database."}, 404
+
+    # def get(self, name):
+    #     for movie in movies:
+    #         if movie["name"] == name:
+    #             return movie
+    #     return {"message": "We coundn't find such a movie in our database."}, 404
 
     # powyzej dodaliśmy błąd 404 - bo oryginalnie flask wyrzuci 200
 
     def post(self, name):
-        request_data = request.get_json()
-        new_movie = {"name": name, "genre": request_data["genre"]}
-        for movie in movies:
-            if movie["name"] == name:
-                return {"message": "Movie already exists"}, 409
-        movies.append(new_movie)
-        return new_movie, 201
+        movie = MovieModel.find_by_movie_name(name)
+        if movie:
+            return {"message": "Movie already exists"}, 400
+        data = Movie.parser.parse_args()
+        movie = MovieModel(name, data["genre"])
+        movie.add_movie()
+        return movie.to_dict(), 201
+
+    # def post(self, name):
+    #     request_data = request.get_json()
+    #     new_movie = {"name": name, "genre": request_data["genre"]}
+    #     for movie in movies:
+    #         if movie["name"] == name:
+    #             return {"message": "Movie already exists"}, 409
+    #     movies.append(new_movie)
+    #     return new_movie, 201
 
     def delete(self, name):
         global movies  # global jest potrzebny tutaj, bo funkcja nie zna tej zmiennej movies....
@@ -82,20 +110,17 @@ class Movie(Resource):
         return {"message": "movie deteted"}
 
     def put(self, name):
-        # data = request.get_json()
         data = Movie.parser.parse_args()
         movie = None
         status = 200
 
-        for _movie in movies:
-            if _movie["name"] == name:
-                movie = _movie
+        movie = MovieModel.find_by_movie_name(name)
 
         if movie is None:
-            movie = {"name": name, "genre": data["genre"]}
-            movies.append(movie)
+            movie = MovieModel(name, data["genre"])
+            movie.add_movie()
         else:
-            movie.update(data)  # mozna wsadzić cokolwiek, niebezpieczenstwo
+            movie.update_movie(data["genre"])  # mozna wsadzić cokolwiek, niebezpieczenstwo
             status = 204
 
         return movie, status
@@ -106,12 +131,11 @@ class MovieList(Resource):
         return {"movies": movies}
 
 
-test = MovieModel.find_by_movie_name("movie1")
-print(test)
-
-test1 = MovieModel.find_by_movie_genre("Comedy")
-print(test1)
+# test = MovieModel.find_by_movie_name("movie1")
+# print(test)
+#
+# test1 = MovieModel.find_by_movie_genre("Comedy")
+# print(test1)
 
 # test2 = MovieModel.find_by_movie_id("1")
 # print(test2)
-
