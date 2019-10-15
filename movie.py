@@ -59,6 +59,28 @@ class MovieModel:
     def to_dict(self):
         return {"title": self.title, "genre": self.genre}
 
+    def delete_movie(self):
+        connection = sqlite3.connect("data.db")
+        cursor = connection.cursor()
+        query = "DELETE FROM movies WHERE name=?"
+        cursor.execute(query, (self.title,))
+        connection.commit()
+        connection.close()
+
+    @classmethod
+    def get_movie_list(cls):
+        movie_list = []
+        query = "SELECT * FROM movies"
+        connection = sqlite3.connect("data.db")
+        cursor = connection.cursor()
+        result = cursor.execute(query)
+
+        for element in result:
+            movie_list.append(cls(element[0], element[1]))
+        connection.commit()
+        connection.close()
+        return movies
+
 
 class Movie(Resource):
     parser = reqparse.RequestParser()
@@ -101,13 +123,11 @@ class Movie(Resource):
     #     return new_movie, 201
 
     def delete(self, name):
-        global movies  # global jest potrzebny tutaj, bo funkcja nie zna tej zmiennej movies....
-        temp_list = []
-        for movie in movies:
-            if movie["name"] != name:
-                temp_list.append(movie)
-        movies = temp_list
-        return {"message": "movie deteted"}
+        movie = MovieModel.find_by_movie_name(name)
+        if movie:
+            movie.delete_movie()
+            return {"message": "movie deteted"}, 204
+        return {"message": "movie with title does not exist"}, 404
 
     def put(self, name):
         data = Movie.parser.parse_args()
@@ -123,13 +143,20 @@ class Movie(Resource):
             movie.update_movie(data["genre"])  # mozna wsadzić cokolwiek, niebezpieczenstwo
             status = 204
 
-        return movie, status
+        movie = MovieModel.find_by_movie_name(name)  # zeby zupdateował
+
+        return movie.to_dict(), status
 
 
 class MovieList(Resource):
+    @jwt_required
     def get(self):
-        return {"movies": movies}
+        movie_list = [movie.to_dict() for movie in MovieModel.get_movie_list()]
+        return {"movies": "movie_list"}
 
+# class MovieList(Resource):
+#     def get(self):
+#         return {"movies": movies}
 
 # test = MovieModel.find_by_movie_name("movie1")
 # print(test)

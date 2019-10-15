@@ -16,7 +16,7 @@ api = Api(app)
 app.secret_key = "my-secret-key"
 jwt = JWT(app, authentication_handler=authenticate, identity_handler=identity)
 
-api.add_resource(Movie, '/movie/<string:name>'),
+api.add_resource(Movie, '/movie/<string:name>')
 api.add_resource(MovieList, '/movies')
 api.add_resource(UserRegister, '/register')
 
